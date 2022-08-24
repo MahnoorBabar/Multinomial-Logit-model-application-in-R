@@ -1,0 +1,108 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+#clear environment
+rm(list = ls())
+
+install.packages("dfidx")    
+install.packages("mlogit")     
+library("mlogit")
+data("HC", package = "mlogit")
+
+data("Train", package = "mlogit")
+Train$choiceid <- 1:nrow(Train)
+head(Train, 3)
+
+#reshape
+Tr <- dfidx(Train, shape = "wide", varying = 4:11, sep = "_",
+            idx = list(c("choiceid", "id")), idnames = c(NA, "alt"))
+            
+Tr$price <- Tr$price / 100 * 2.20371
+Tr$time <- Tr$time / 60
+
+head(Tr, 3)
+
+#extract specific colomn
+head(idx(Tr), 3) 
+
+#Full project
+#clear environment
+rm(list = ls())
+
+#packages, data
+data("ModeCanada", package = "mlogit")
+
+#define data frame, with alt/subsets
+MC <- dfidx(ModeCanada, subset = noalt == 4)
+
+ml.MC1 <- mlogit(choice ~ cost + freq + ovt | income | ivt, MC)
+
+ml.MC1b <- mlogit(choice ~ cost + freq + ovt | income | ivt, ModeCanada,
+subset = noalt == 4, idx = c("case", "alt"))
+
+MC$time <- with(MC, ivt + ovt)
+ml.MC1 <- mlogit(choice ~ cost + freq | income | time, MC, 
+alt.subset = c("car", "train", "air"), reflevel = "car")
+
+#main results
+summary(ml.MC1)
+
+#probability of actual choices
+head(fitted(ml.MC1, type = "outcome"))
+
+#probability of aall alternatives
+head(fitted(ml.MC1, type = "probabilities"), 4)
+
+sum(log(fitted(ml.MC1, type = "outcome")))
+
+logLik(ml.MC1)
+
+#market share
+apply(fitted(ml.MC1, type = "probabilities"), 2, mean)
+
+#predictions for sample mean values
+predict(ml.MC1)
+
+#predict effect of reduction in train transport time of 20% (create new df, then predict)
+NMC <- MC
+# YC2020/05/03 should replace everywhere index() by idx()
+NMC[idx(NMC)$alt == "train", "time"] <- 0.8 *
+NMC[idx(NMC)$alt == "train", "time"]
+Oprob <- fitted(ml.MC1, type = "probabilities")
+Nprob <- predict(ml.MC1, newdata = NMC)
+rbind(old = apply(Oprob, 2, mean), new = apply(Nprob, 2, mean))
+
+#ratio of probabilities for air and car (illustration of IIA)
+head(Nprob[, "air"] / Nprob[, "car"])
+head(Oprob[, "air"] / Oprob[, "car"])
+
+#compute individual surplus due to reduced train time
+ivbefore <- logsum(ml.MC1)
+ivafter <- logsum(ml.MC1, data = NMC)
+surplus <- - (ivafter - ivbefore) / coef(ml.MC1)["cost"]
+summary(surplus)
+
+#marginal effects (for 100% change in income, probaility of choice changes as follows)
+effects(ml.MC1, covariate = "income", type = "ar")
+#alternate specific elasticities
+effects(ml.MC1, covariate = "cost", type = "rr")
+
+#travel time valuation
+coef(ml.MC1)[grep("time", names(coef(ml.MC1)))] /
+    coef(ml.MC1)["cost"] * 60 
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r}
+plot(cars)
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
